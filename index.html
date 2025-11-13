@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="es" class="scroll-smooth cursor-none">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <!-- TÍTULO Y METADATOS (LO NUEVO PARA QUE SE VEA PRO AL COMPARTIR) -->
+    <title>Melodía AI | Proyecto Final UMNG</title>
+    <meta name="description" content="Plataforma de clasificación de instrumentos musicales utilizando Redes Neuronales Convolucionales (CNN) y Recurrentes (RNN). Proyecto de Ingeniería UMNG.">
+    <meta name="theme-color" content="#050505">
+    
+    <!-- Open Graph / Facebook / WhatsApp -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Melodía AI - El Sonido Revelado">
+    <meta property="og:description" content="Inteligencia Artificial aplicada al reconocimiento de patrones acústicos y visuales.">
+    
+    <!-- FAVICON (El icono de la pestaña generado con código) -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 40 40%22><rect x=%224%22 y=%2212%22 width=%224%22 height=%2216%22 rx=%221%22 fill=%22white%22/><rect x=%2212%22 y=%228%22 width=%224%22 height=%2224%22 rx=%221%22 fill=%22white%22/><rect x=%2220%22 y=%222%22 width=%224%22 height=%2236%22 rx=%221%22 fill=%22white%22/><rect x=%2228%22 y=%228%22 width=%224%22 height=%2224%22 rx=%221%22 fill=%22white%22/><rect x=%2236%22 y=%2212%22 width=%224%22 height=%2216%22 rx=%221%22 fill=%22white%22/></svg>">
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Fuentes -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&family=Outfit:wght@200;400;700;800&family=Space+Mono&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Outfit', 'sans-serif'],
+                        body: ['Inter', 'sans-serif'],
+                        mono: ['Space Mono', 'monospace'],
+                    },
+                    colors: {
+                        umng: '#1e3a8a',
+                        neon: '#00f3ff',
+                    },
+                    animation: {
+                        'float': 'float 15s infinite ease-in-out',
+                        'glitch': 'glitch 3s infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0) rotate(0deg)' },
+                            '50%': { transform: 'translateY(-20px) rotate(5deg)' },
+                        },
+                        glitch: {
+                            '0%': { transform: 'translate(0)' },
+                            '2%': { transform: 'translate(-2px, 2px)' },
+                            '4%': { transform: 'translate(2px, -2px)' },
+                            '6%': { transform: 'translate(0)' },
+                            '100%': { transform: 'translate(0)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            background-color: #050505;
+            color: white;
+            overflow-x: hidden;
+        }
+
+        /* CURSOR PERSONALIZADO */
+        #cursor-dot, #cursor-outline {
+            position: fixed;
+            top: 0;
+            left: 0;
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            z-index: 9999;
+            pointer-events: none;
+            mix-blend-mode: difference;
+        }
+        #cursor-dot { width: 8px; height: 8px; background-color: white; }
+        #cursor-outline { 
+            width: 40px; height: 40px; 
+            border: 1px solid rgba(255, 255, 255, 0.5); 
+            transition: width 0.2s, height 0.2s, background-color 0.2s;
+        }
+        
+        body.hovering #cursor-outline {
+            width: 60px; height: 60px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-color: transparent;
+            backdrop-filter: blur(2px);
+        }
+
+        /* ESTILOS DE VIDRIO */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(16px);
+            transition: all 0.3s ease;
+        }
+        .glass-card:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateY(-5px);
+            box-shadow: 0 0 30px rgba(0, 243, 255, 0.1); /* Neon Glow sutil */
+        }
+
+        /* PANTALLAS */
+        .screen { display: none; opacity: 0; transition: opacity 0.5s; }
+        .screen.active { display: flex; opacity: 1; }
+
+        /* CANVAS MATRIX */
+        #matrix-canvas {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            opacity: 0.3;
+            pointer-events: none;
+        }
+        
+        /* FONDO MUSICAL */
+        #musical-space {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            background: radial-gradient(circle at 50% 50%, #0f1014 0%, #000000 100%);
+        }
+
+        @media (max-width: 768px) {
+            .cursor-none { cursor: auto; }
+            #cursor-dot, #cursor-outline { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- SONIDO INICIALIZADOR -->
+    <div id="sound-init" onclick="initAudio()" class="fixed inset-0 z-[99999] hidden"></div>
+
+    <!-- CURSOR -->
+    <div id="cursor-dot"></div>
+    <div id="cursor-outline"></div>
+
+    <!-- BACKGROUND (NOTAS MUSICALES) -->
+    <div id="musical-space"></div>
+    <!-- Textura de ruido sutil -->
+    <div class="fixed inset-0 opacity-[0.03] pointer-events-none z-[1]" style="background-image: url('data:image/svg+xml,%3Csvg viewBox=%220 0 200 200%22 xmlns=%22http://www.w3.org/2000/svg%22%3E%3Cfilter id=%22noiseFilter%22%3E%3CfeTurbulence type=%22fractalNoise%22 baseFrequency=%220.65%22 numOctaves=%223%22 stitchTiles=%22stitch%22/%3E%3C/filter%3E%3Crect width=%22100%25%22 height=%22100%25%22 filter=%22url(%23noiseFilter)%22 opacity=%221%22/%3E%3C/svg%3E');"></div>
+
+    <!-- NAV -->
+    <nav class="fixed top-0 w-full z-50 p-6 flex justify-between items-center mix-blend-difference text-white">
+        <div class="flex items-center gap-3 hoverable" onclick="goHome()">
+            <!-- LOGO SVG (Coincide con el Favicon) -->
+            <svg width="24" height="24" viewBox="0 0 40 40" fill="none" class="transition-transform duration-500 group-hover:rotate-180">
+                <rect x="4" y="12" width="4" height="16" rx="1" fill="white"/>
+                <rect x="12" y="8" width="4" height="24" rx="1" fill="white"/>
+                <rect x="20" y="2" width="4" height="36" rx="1" fill="white"/>
+                <rect x="28" y="8" width="4" height="24" rx="1" fill="white"/>
+                <rect x="36" y="12" width="4" height="16" rx="1" fill="white"/>
+            </svg>
+            <span class="text-sm font-bold tracking-[0.2em] uppercase">Melodía</span>
+        </div>
+        <div class="flex items-center gap-4">
+            <button id="sound-toggle" class="hoverable opacity-60 hover:opacity-100 transition-opacity" onclick="toggleMute()">
+                <i data-lucide="volume-2" class="w-5 h-5"></i>
+            </button>
+            <a href="https://github.com/" target="_blank" class="hoverable opacity-60 hover:opacity-100 transition-opacity">
+                <i data-lucide="github" class="w-5 h-5"></i>
+            </a>
+        </div>
+    </nav>
+
+    <main class="relative z-10 w-full">
+
+        <!-- SCREEN 1: HOME -->
+        <section id="screen-home" class="screen active flex-col w-full">
+            <div class="min-h-screen w-full flex flex-col items-center justify-center text-center px-4 relative">
+                
+                <div class="animate-[fadeIn_1s_ease-out]">
+                    <span class="px-3 py-1 border border-white/20 rounded-full text-[10px] uppercase tracking-widest text-gray-400">Proyecto Final • UMNG</span>
+                </div>
+
+                <h1 class="text-6xl md:text-9xl font-extralight text-white my-8 tracking-tighter leading-[0.9] group cursor-default">
+                    El Sonido<br>
+                    <span class="font-bold italic text-transparent bg-clip-text bg-gradient-to-b from-white to-gray-600 group-hover:animate-glitch inline-block">Revelado.</span>
+                </h1>
+                
+                <p class="text-gray-400 font-body text-sm tracking-[0.2em] uppercase max-w-md">
+                    Clasificación de Instrumentos vía Machine Learning
+                </p>
+
+                <div class="absolute bottom-12 hoverable cursor-pointer animate-bounce" onclick="scrollToNext()">
+                    <i data-lucide="arrow-down" class="w-6 h-6 text-white/50"></i>
+                </div>
+            </div>
+
+            <!-- INFO SECTION -->
+            <div id="about-section" class="w-full py-32 px-6 border-t border-white/5 bg-black/40 backdrop-blur-sm">
+                <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-20">
+                    <div>
+                        <h2 class="text-4xl font-bold mb-6">Ingeniería <br> <span class="text-indigo-400">Neo-Granadina</span></h2>
+                        <p class="text-gray-400 font-body leading-relaxed text-lg">
+                            Una solución robusta para el reconocimiento de patrones acústicos y visuales, desarrollada en la Facultad de Ingeniería.
+                        </p>
+                    </div>
+                    <div class="space-y-4">
+                        <div class="text-xs uppercase tracking-widest text-gray-600 mb-4">Core Team</div>
+                        <!-- Students -->
+                        <a href="#" class="hoverable glass-card p-4 rounded-xl flex items-center justify-between group">
+                            <div class="flex items-center gap-4">
+                                <div class="w-8 h-8 bg-white/5 rounded-full flex items-center justify-center text-xs">01</div>
+                                <div><h4 class="font-bold text-sm">Estudiante 1</h4><p class="text-[10px] text-gray-500">ML Architect</p></div>
+                            </div>
+                            <i data-lucide="github" class="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                        </a>
+                        <a href="#" class="hoverable glass-card p-4 rounded-xl flex items-center justify-between group">
+                            <div class="flex items-center gap-4">
+                                <div class="w-8 h-8 bg-white/5 rounded-full flex items-center justify-center text-xs">02</div>
+                                <div><h4 class="font-bold text-sm">Estudiante 2</h4><p class="text-[10px] text-gray-500">Frontend Lead</p></div>
+                            </div>
+                            <i data-lucide="github" class="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                        </a>
+                        <a href="#" class="hoverable glass-card p-4 rounded-xl flex items-center justify-between group">
+                            <div class="flex items-center gap-4">
+                                <div class="w-8 h-8 bg-white/5 rounded-full flex items-center justify-center text-xs">03</div>
+                                <div><h4 class="font-bold text-sm">Estudiante 3</h4><p class="text-[10px] text-gray-500">Backend Lead</p></div>
+                            </div>
+                            <i data-lucide="github" class="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MODEL SELECTOR -->
+            <div class="py-32 px-4 w-full flex flex-col items-center justify-center">
+                <h3 class="text-2xl font-light mb-16">Selecciona Modelo de Inferencia</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl w-full">
+                    <div onclick="selectMode('image')" class="hoverable glass-card p-10 rounded-[2rem] cursor-pointer group relative overflow-hidden h-80 flex flex-col justify-end">
+                        <div class="absolute inset-0 bg-indigo-600/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <i data-lucide="scan-eye" class="w-12 h-12 text-white mb-auto group-hover:text-indigo-400 transition-colors"></i>
+                        <div class="relative z-10">
+                            <h4 class="text-3xl font-bold mb-2">Visual (CNN)</h4>
+                            <p class="text-sm text-gray-400">Análisis de tensores de imagen.</p>
+                        </div>
+                    </div>
+                    <div onclick="selectMode('audio')" class="hoverable glass-card p-10 rounded-[2rem] cursor-pointer group relative overflow-hidden h-80 flex flex-col justify-end">
+                        <div class="absolute inset-0 bg-purple-600/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                        <i data-lucide="waves" class="w-12 h-12 text-white mb-auto group-hover:text-purple-400 transition-colors"></i>
+                        <div class="relative z-10">
+                            <h4 class="text-3xl font-bold mb-2">Acústico (RNN)</h4>
+                            <p class="text-sm text-gray-400">Procesamiento de señales digitales.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SCREEN 2: UPLOAD -->
+        <section id="screen-upload" class="screen flex-col min-h-screen w-full pt-28 px-4 container mx-auto max-w-2xl hidden">
+            <button onclick="goHome()" class="hoverable mb-8 text-xs font-bold uppercase tracking-widest text-gray-500 hover:text-white transition-colors flex items-center gap-2">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i> Cancelar
+            </button>
+
+            <div class="w-full border border-white/10 rounded-[2rem] bg-[#0a0a0a] p-1 relative">
+                <div class="bg-black rounded-[1.8rem] p-8 md:p-12 text-center relative overflow-hidden">
+                    <div class="relative z-10">
+                        <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-white/5 mb-6">
+                            <i id="mode-icon" data-lucide="upload" class="w-5 h-5"></i>
+                        </div>
+                        <h2 class="text-2xl font-bold mb-2">Cargar Dataset</h2>
+                        <p id="mode-text" class="text-xs text-gray-500 mb-8 font-mono">Esperando input...</p>
+
+                        <div id="drop-zone" class="hoverable border border-dashed border-white/20 rounded-xl h-64 flex flex-col items-center justify-center cursor-pointer hover:bg-white/5 transition-colors relative">
+                            <input type="file" id="file-input" class="hidden">
+                            <div id="upload-empty" class="pointer-events-none">
+                                <span class="text-[10px] uppercase tracking-widest text-gray-600">Click para examinar</span>
+                            </div>
+                            <div id="upload-preview" class="absolute inset-0 hidden items-center justify-center bg-black z-20 p-4 rounded-xl">
+                                <img id="img-prev" class="h-full w-full object-contain opacity-80 hidden rounded">
+                                <div id="audio-prev" class="hidden flex-col items-center">
+                                    <div class="w-16 h-16 rounded-full border border-white/20 flex items-center justify-center animate-spin-slow">
+                                        <i data-lucide="disc" class="w-6 h-6 text-gray-400"></i>
+                                    </div>
+                                    <span id="filename" class="mt-4 text-xs font-mono text-indigo-400">sample.wav</span>
+                                </div>
+                                <button onclick="clearFile(event)" class="hoverable absolute top-2 right-2 p-2 bg-black/50 text-white hover:text-red-500 rounded-full">
+                                    <i data-lucide="x" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <button id="analyze-btn" onclick="startAnalysis()" disabled class="hoverable mt-6 w-full py-4 bg-white text-black font-bold text-xs uppercase tracking-widest rounded-xl disabled:opacity-20 disabled:cursor-not-allowed hover:scale-[1.01] transition-transform">
+                            Iniciar Inferencia
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SCREEN 3: RESULTS -->
+        <section id="screen-result" class="screen flex-col min-h-screen w-full pt-24 px-4 container mx-auto max-w-5xl hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 h-full">
+                <div class="glass-card rounded-[2rem] bg-black/50 relative overflow-hidden h-[400px] lg:h-auto flex items-center justify-center border border-white/10">
+                    <div id="result-media" class="w-full h-full flex items-center justify-center opacity-90 p-8"></div>
+                    <div class="absolute top-4 right-4">
+                        <i data-lucide="check-circle-2" class="w-6 h-6 text-green-500"></i>
+                    </div>
+                </div>
+
+                <div class="flex flex-col justify-center p-4 lg:p-10">
+                    <div class="mb-8">
+                        <span class="text-[10px] uppercase tracking-widest text-gray-500 border border-white/10 px-2 py-1 rounded">Resultado Principal</span>
+                        <h1 id="result-title" class="text-5xl md:text-6xl font-bold mt-4 mb-2">Piano</h1>
+                        <p id="result-desc" class="text-gray-400 font-body text-sm leading-relaxed">Descripción...</p>
+                    </div>
+
+                    <div class="bg-white/5 p-6 rounded-2xl border border-white/5 mb-10">
+                        <div class="text-[10px] uppercase tracking-widest text-gray-500 mb-4">Matriz de Confianza</div>
+                        <div id="stats-container" class="space-y-4">
+                            <!-- JS llenará esto -->
+                        </div>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <button onclick="goHome()" class="hoverable px-6 py-3 border border-white/10 rounded-lg text-xs font-bold uppercase tracking-widest hover:bg-white hover:text-black transition-colors">
+                            Nueva Búsqueda
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- LOADING (MATRIX) -->
+    <div id="loading" class="fixed inset-0 bg-black z-[100] hidden flex-col items-center justify-center overflow-hidden">
+        <canvas id="matrix-canvas"></canvas>
+        <div class="relative z-10 flex flex-col items-center">
+            <div class="font-mono text-4xl font-bold animate-pulse mb-4 tracking-widest text-white">PROCESANDO</div>
+            <div class="w-64 h-px bg-gray-800 relative overflow-hidden">
+                <div class="absolute inset-0 bg-indigo-500 w-1/2 animate-[float_1s_ease-in-out_infinite]"></div>
+            </div>
+            <div id="loading-text" class="mt-4 text-[10px] font-mono text-indigo-400 uppercase">Inicializando Red Neuronal...</div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. BACKGROUND PARTICLES (NOTAS MUSICALES) ---
+        const space = document.getElementById('musical-space');
+        const symbols = ['♪', '♫', '♩', '♬'];
+        for(let i=0; i<30; i++){
+            const el = document.createElement('div');
+            el.style.position = 'absolute';
+            el.style.left = Math.random()*100 + '%';
+            el.style.top = Math.random()*100 + '%';
+            el.style.opacity = Math.random()*0.2;
+            el.style.fontSize = (Math.random()*20 + 10) + 'px';
+            el.style.color = 'white';
+            el.innerText = symbols[Math.floor(Math.random()*symbols.length)];
+            el.style.animation = `float ${Math.random()*10 + 10}s infinite ease-in-out`;
+            el.style.animationDelay = `-${Math.random()*10}s`;
+            space.appendChild(el);
+        }
+
+        // --- 2. AUDIO ENGINE (SYNTH) ---
+        class AudioEngine {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+
+            playTone(freq, type, duration, vol = 0.1) {
+                if (this.muted || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + duration);
+            }
+
+            hover() { this.playTone(800, 'sine', 0.1, 0.05); }
+            click() { this.playTone(300, 'square', 0.1, 0.05); }
+            success() {
+                // Acorde Mayor
+                this.playTone(440, 'sine', 0.5, 0.1); // A
+                setTimeout(() => this.playTone(554, 'sine', 0.5, 0.1), 100); // C#
+                setTimeout(() => this.playTone(659, 'sine', 0.8, 0.1), 200); // E
+            }
+        }
+
+        const audio = new AudioEngine();
+
+        function initAudio() {
+            audio.init();
+            document.getElementById('sound-init').remove();
+        }
+        // Iniciar audio al primer click en la página
+        document.body.addEventListener('click', initAudio, { once: true });
+
+        function toggleMute() {
+            audio.muted = !audio.muted;
+            const btn = document.getElementById('sound-toggle');
+            btn.innerHTML = audio.muted 
+                ? '<i data-lucide="volume-x" class="w-5 h-5"></i>' 
+                : '<i data-lucide="volume-2" class="w-5 h-5"></i>';
+            lucide.createIcons();
+        }
+
+        document.querySelectorAll('.hoverable').forEach(el => {
+            el.addEventListener('mouseenter', () => audio.hover());
+            el.addEventListener('click', () => audio.click());
+        });
+
+        // --- 3. MATRIX EFFECT (CANVAS) ---
+        const canvas = document.getElementById('matrix-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        const katakana = '01';
+        const fontSize = 14;
+        const columns = canvas.width / fontSize;
+        const drops = Array(Math.floor(columns)).fill(1);
+
+        function drawMatrix() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.05)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#1e3a8a';
+            ctx.font = fontSize + 'px monospace';
+            for (let i = 0; i < drops.length; i++) {
+                const text = katakana.charAt(Math.floor(Math.random() * katakana.length));
+                ctx.fillText(text, i * fontSize, drops[i] * fontSize);
+                if (drops[i] * fontSize > canvas.height && Math.random() > 0.975) drops[i] = 0;
+                drops[i]++;
+            }
+        }
+        let matrixInterval;
+
+        // --- 4. APP LOGIC ---
+        let currentMode = 'image';
+        let file = null;
+
+        function scrollToNext() {
+            document.getElementById('about-section').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function switchScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => {
+                s.classList.remove('active');
+                setTimeout(() => s.classList.add('hidden'), 500);
+            });
+            const t = document.getElementById(id);
+            t.classList.remove('hidden');
+            setTimeout(() => t.classList.add('active'), 50);
+        }
+
+        function goHome() {
+            file = null;
+            switchScreen('screen-home');
+            window.scrollTo(0,0);
+        }
+
+        function selectMode(mode) {
+            currentMode = mode;
+            switchScreen('screen-upload');
+        }
+
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+
+        dropZone.addEventListener('click', (e) => {
+            if(!e.target.closest('button')) fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
+
+        function handleFile(f) {
+            if(!f) return;
+            file = f;
+            document.getElementById('upload-empty').classList.add('hidden');
+            document.getElementById('upload-preview').classList.remove('hidden');
+            document.getElementById('analyze-btn').disabled = false;
+
+            if(currentMode === 'image') {
+                const img = document.getElementById('img-prev');
+                img.src = URL.createObjectURL(f);
+                img.classList.remove('hidden');
+                document.getElementById('audio-prev').classList.add('hidden');
+            } else {
+                document.getElementById('img-prev').classList.add('hidden');
+                const aud = document.getElementById('audio-prev');
+                aud.classList.remove('hidden');
+                aud.classList.add('flex');
+                document.getElementById('filename').innerText = f.name;
+            }
+        }
+
+        function clearFile(e) {
+            if(e) e.stopPropagation();
+            file = null;
+            fileInput.value = '';
+            document.getElementById('upload-empty').classList.remove('hidden');
+            document.getElementById('upload-preview').classList.add('hidden');
+            document.getElementById('analyze-btn').disabled = true;
+        }
+
+        function startAnalysis() {
+            const load = document.getElementById('loading');
+            load.classList.remove('hidden');
+            load.classList.add('flex');
+            matrixInterval = setInterval(drawMatrix, 30);
+
+            const texts = ["Cargando Dataset...", "Vectorizando Input...", "Inferencia CNN...", "Softmax..."];
+            let i = 0;
+            const txtInt = setInterval(() => {
+                document.getElementById('loading-text').innerText = texts[i % texts.length];
+                i++;
+            }, 800);
+
+            setTimeout(() => {
+                clearInterval(matrixInterval);
+                clearInterval(txtInt);
+                load.classList.add('hidden');
+                load.classList.remove('flex');
+                showResult();
+                audio.success();
+            }, 3500);
+        }
+
+        function showResult() {
+            // DATOS MOCK
+            const data = currentMode === 'image' 
+                ? { 
+                    main: 'Fender Strat', 
+                    desc: 'Guitarra eléctrica de cuerpo sólido. Detectada por contorno doble y puente.',
+                    probs: [ { l: 'Fender Strat', p: 96.2 }, { l: 'Gibson Les Paul', p: 2.4 }, { l: 'Telecaster', p: 1.4 } ],
+                    media: `<img src="${URL.createObjectURL(file)}" class="w-full h-full object-cover rounded-xl">`
+                }
+                : {
+                    main: 'Violín',
+                    desc: 'Cuerda frotada. Espectrograma armónico característico.',
+                    probs: [ { l: 'Violín', p: 92.1 }, { l: 'Viola', p: 5.5 }, { l: 'Cello', p: 2.4 } ],
+                    media: `<div class="flex gap-1 h-32 items-center justify-center w-full">${Array(10).fill(0).map(()=>`<div class="w-2 bg-white animate-[float_0.5s_ease-in-out_infinite]" style="animation-delay:${Math.random()}s; height:${Math.random()*100}%"></div>`).join('')}</div>`
+                };
+
+            document.getElementById('result-title').innerText = data.main;
+            document.getElementById('result-desc').innerText = data.desc;
+            document.getElementById('result-media').innerHTML = data.media;
+
+            const stats = document.getElementById('stats-container');
+            stats.innerHTML = data.probs.map(item => `
+                <div>
+                    <div class="flex justify-between text-xs font-mono mb-1">
+                        <span>${item.l}</span>
+                        <span class="text-indigo-400">${item.p}%</span>
+                    </div>
+                    <div class="w-full h-1 bg-white/10 rounded-full overflow-hidden">
+                        <div style="width: ${item.p}%" class="h-full bg-indigo-500 transition-all duration-1000"></div>
+                    </div>
+                </div>
+            `).join('');
+
+            switchScreen('screen-result');
+        }
+
+        // CURSOR LOGIC
+        const cursorDot = document.getElementById('cursor-dot');
+        const cursorOutline = document.getElementById('cursor-outline');
+        window.addEventListener('mousemove', (e) => {
+            cursorDot.style.left = `${e.clientX}px`;
+            cursorDot.style.top = `${e.clientY}px`;
+            cursorOutline.animate({ left: `${e.clientX}px`, top: `${e.clientY}px` }, { duration: 500, fill: "forwards" });
+        });
+
+        // INIT
+        lucide.createIcons();
+    </script>
+</body>
+</html>
